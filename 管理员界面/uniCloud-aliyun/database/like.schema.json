@@ -1,0 +1,79 @@
+{
+  "bsonType": "object",
+  "required": [
+    "content_id",
+    "user_id"
+  ],
+  "permission": {
+    "read": "auth.uid != null",
+    "create": "auth.uid != null",
+    "delete": "doc.user_id == auth.uid",
+    "update": false
+  },
+  "properties": {
+    "_id": {
+      "description": "ID，系统自动生成"
+    },
+    "content_id": {
+      "bsonType": "string",
+      "description": "内容ID，指向contents表",
+      "foreignKey": "contents._id"
+    },
+    "user_id": {
+      "bsonType": "string",
+      "description": "用户ID",
+      "foreignKey": "uni-id-users._id"
+    },
+    "type": {
+      "bsonType": "int",
+      "description": "点赞类型，1: 内容点赞，2: 评论点赞",
+      "defaultValue": 1
+    },
+    "target_id": {
+      "bsonType": "string",
+      "description": "目标ID，当type=2时，为评论ID"
+    },
+    "create_date": {
+      "bsonType": "timestamp",
+      "description": "点赞时间",
+      "forceDefaultValue": {
+        "$env": "now"
+      }
+    }
+  },
+  "indexes": [
+    {
+      "IndexName": "content_user_idx",
+      "MgoKeySchema": {
+        "MgoIndexKeys": [
+          {
+            "Name": "content_id",
+            "Direction": "1"
+          },
+          {
+            "Name": "user_id",
+            "Direction": "1"
+          }
+        ]
+      },
+      "MgoIsUnique": true
+    },
+    {
+      "IndexName": "user_create_date_idx",
+      "MgoKeySchema": {
+        "MgoIndexKeys": [
+          {
+            "Name": "user_id",
+            "Direction": "1"
+          },
+          {
+            "Name": "create_date",
+            "Direction": "-1"
+          }
+        ]
+      },
+      "MgoIsUnique": false
+    }
+  ],
+  "version": "1.0.0"
+}

@@ -1,0 +1,548 @@
+<template>
+  <AdminLayout current-path="user" page-title="用户管理">
+    <view class="user-manage">
+      <!-- 筛选栏 -->
+      <view class="filter-card">
+        <view class="filter-item search-box">
+          <text class="iconfont search-icon">🔍</text>
+          <input 
+            v-model="filter.keyword" 
+            placeholder="请输入用户名/邮箱搜索" 
+            class="search-input"
+          />
+        </view>
+        
+        <view class="filter-item date-range">
+          <picker mode="date" v-model="filter.startDate">
+            <view class="date-picker">{{ filter.startDate || '开始日期' }}</view>
+          </picker>
+          <text class="date-separator">-</text>
+          <picker mode="date" v-model="filter.endDate">
+            <view class="date-picker">{{ filter.endDate || '结束日期' }}</view>
+          </picker>
+        </view>
+        
+        <view class="filter-item">
+          <picker v-model="filter.status" :range="statusOptions" range-key="label">
+            <view class="select-box">
+              {{ statusOptions.find(item => item.value === filter.status).label }}
+              <text class="arrow">▼</text>
+            </view>
+          </picker>
+        </view>
+        
+        <button @click="getUserList" class="btn btn-primary">查询</button>
+      </view>
+      
+      <!-- 用户列表 -->
+      <view class="table-card">
+        <view class="table-scroll">
+          <view class="table-header">
+            <view class="col col-user">用户信息</view>
+            <view class="col col-date">注册时间</view>
+            <view class="col col-status">状态</view>
+            <view class="col col-action">操作</view>
+          </view>
+          
+          <view class="table-body">
+            <view class="table-row" v-for="user in userList" :key="user._id">
+              <view class="col col-user">
+                <view class="user-cell">
+                  <view class="user-avatar">{{ user.username.charAt(0).toUpperCase() }}</view>
+                  <view class="user-info">
+                    <text class="username">{{ user.username }}</text>
+                    <text class="email">{{ user.email || '未绑定邮箱' }}</text>
+                  </view>
+                </view>
+              </view>
+              <view class="col col-date">{{ formatDate(user.create_time) }}</view>
+              <view class="col col-status">
+                <text class="status-badge" :class="user.status === 0 ? 'active' : 'disabled'">
+                  {{ user.status === 0 ? '正常' : '已禁用' }}
+                </text>
+              </view>
+              <view class="col col-action">
+                <view class="action-btn primary" @click.stop="viewUserDetail(user._id)">详情</view>
+                <view class="action-btn warning" @click.stop="toggleUserStatus(user._id, user.status)">
+                  {{ user.status === 0 ? '禁用' : '启用' }}
+                </view>
+                <view class="action-btn danger" @click.stop="showDeleteConfirm(user._id)">删除</view>
+              </view>
+            </view>
+          </view>
+        </view>
+        
+        <!-- 分页控件 -->
+        <view class="pagination-container" v-if="total > 0">
+          <text class="total-text">共 {{ total }} 条数据</text>
+          <view class="page-ctrl">
+            <button class="page-btn" @click="changePage(page - 1)" :disabled="page <= 1">上一页</button>
+            <text class="page-num">{{ page }} / {{ totalPages }}</text>
+            <button class="page-btn" @click="changePage(page + 1)" :disabled="page >= totalPages">下一页</button>
+          </view>
+        </view>
+      </view>
+      
+    <!-- 删除确认弹窗 (保持原有) -->
+    <uni-popup ref="deletePopupRef" type="dialog">
+      <uni-popup-dialog 
+        title="删除确认" 
+        content="确定要删除该用户吗？此操作不可恢复，将同步删除用户发布的内容和评论！"
+        @confirm="confirmDelete"
+        @close="cancelDelete"
+      ></uni-popup-dialog>
+    </uni-popup>
+    </view>
+  </AdminLayout>
+</template>
+
+<script setup>
+import { ref, reactive } from 'vue'
+import { onLoad, onShow } from '@dcloudio/uni-app'
+import AdminLayout from '@/admin/components/AdminLayout.uvue'
+
+// ... (keep logic)
+// 权限检查
+onShow(() => {
+  const token = uni.getStorageSync('adminToken')
+  if (!token) {
+    uni.reLaunch({ url: '/pages/login/login' })
+  }
+})
+
+// 状态选项
+const statusOptions = ref([
+  { value: 'all', label: '全部状态' },
+  { value: 'active', label: '正常用户' },
+  { value: 'disabled', label: '禁用用户' }
+])
+
+// 筛选条件
+const filter = reactive({
+  keyword: '',
+  startDate: '',
+  endDate: '',
+  status: 'all'
+})
+
+// 列表数据
+const userList = ref([])
+const total = ref(0)
+const page = ref(1)
+const pageSize = ref(10)
+const totalPages = ref(0)
+const deleteUserId = ref('')
+const deletePopupRef = ref<any>(null)
+
+// 页面加载获取用户列表
+onLoad(() => {
+  if (uni.getStorageSync('adminToken')) {
+    getUserList()
+  }
+})
+
+// 获取用户列表
+const getUserList = async () => {
+  try {
+    const res = await uniCloud.callFunction({
+      name: 'admin-api',
+      data: {
+        action: 'getUserList',
+        keyword: filter.keyword,
+        startDate: filter.startDate,
+        endDate: filter.endDate,
+        status: filter.status,
+        page: page.value,
+        pageSize: pageSize.value,
+        token: uni.getStorageSync('adminToken')
+      }
+    })
+    if (res.result.code === 200) {
+      userList.value = res.result.data.list
+      total.value = res.result.data.total
+      totalPages.value = res.result.data.totalPages
+    } else {
+      uni.showToast({ title: res.result.message, icon: 'none' })
+    }
+  } catch (e) {
+    uni.showToast({ title: '获取用户列表失败', icon: 'none' })
+  }
+}
+
+// 切换用户状态
+const toggleUserStatus = async (userId, currentStatus) => {
+  try {
+    const newStatus = currentStatus === 0 ? 1 : 0
+    const res = await uniCloud.callFunction({
+      name: 'admin-api',
+      data: {
+        action: 'toggleUserStatus',
+        user_id: userId,
+        status: newStatus,
+        token: uni.getStorageSync('adminToken')
+      }
+    })
+    if (res.result.code === 200) {
+      uni.showToast({ title: res.result.message, icon: 'success' })
+      getUserList() // 刷新列表
+    } else {
+      uni.showToast({ title: res.result.message, icon: 'none' })
+    }
+  } catch (e) {
+    uni.showToast({ title: '切换用户状态失败', icon: 'none' })
+  }
+}
+
+// 查看用户详情
+const viewUserDetail = (userId) => {
+  uni.navigateTo({ url: `/admin/pages/user/detail?userId=${userId}` })
+}
+
+// 显示删除确认弹窗
+const showDeleteConfirm = (userId) => {
+  console.log('点击删除按钮, userId:', userId)
+  if (!userId) {
+    uni.showToast({ title: '用户ID无效', icon: 'none' })
+    return
+  }
+  deleteUserId.value = userId
+  
+  if (deletePopupRef.value !== null) {
+    deletePopupRef.value.open()
+  } else {
+    console.error('弹窗组件引用未找到')
+    uni.showToast({ title: '系统错误', icon: 'none' })
+  }
+}
+
+// 确认删除用户
+const confirmDelete = async () => {
+  try {
+    const res = await uniCloud.callFunction({
+      name: 'admin-api',
+      data: {
+        action: 'deleteUser',
+        user_id: deleteUserId.value,
+        token: uni.getStorageSync('adminToken')
+      }
+    })
+    if (res.result.code === 200) {
+      uni.showToast({ title: '用户删除成功', icon: 'success' })
+      if (deletePopupRef.value !== null) {
+        deletePopupRef.value.close()
+      }
+      // 等待 Toast 显示完毕再刷新
+      setTimeout(() => {
+        getUserList() 
+      }, 1500)
+    } else {
+      uni.showToast({ title: res.result.message || '删除失败', icon: 'none' })
+    }
+  } catch (e) {
+    console.error('删除用户失败:', e)
+    uni.showToast({ title: '系统错误，请重试', icon: 'none' })
+  }
+}
+
+// 取消删除
+const cancelDelete = () => {
+  if (deletePopupRef.value !== null) {
+    deletePopupRef.value.close()
+  }
+}
+
+// 切换页码
+const changePage = (newPage) => {
+  if (newPage < 1 || newPage > totalPages.value) return
+  page.value = newPage
+  getUserList()
+}
+
+// 日期格式化
+const formatDate = (timestamp) => {
+  if (!timestamp) return ''
+  const date = new Date(timestamp)
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
+}
+</script>
+
+<style scoped>
+.user-manage {
+  /* 增加页面留白 */
+  padding: 0; 
+}
+
+.filter-card {
+  background-color: #fff;
+  border-radius: 12px;
+  padding: 24px;
+  margin-bottom: 24px;
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  gap: 16px;
+  align-items: center;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.04);
+}
+
+.filter-item {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+}
+
+.search-box {
+  background-color: #f5f5f7;
+  border-radius: 8px;
+  padding: 0 12px;
+  height: 40px;
+  width: 300px;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+}
+
+.search-icon {
+  color: #999;
+  margin-right: 8px;
+}
+
+.search-input {
+  flex: 1;
+  font-size: 14px;
+  color: #333;
+}
+
+.date-range {
+  background-color: #f5f5f7;
+  border-radius: 8px;
+  padding: 0 12px;
+  height: 40px;
+}
+
+.date-picker {
+  font-size: 14px;
+  color: #666;
+  padding: 0 8px;
+  cursor: pointer;
+}
+
+.date-separator {
+  color: #999;
+  margin: 0 8px;
+}
+
+.select-box {
+  background-color: #f5f5f7;
+  border-radius: 8px;
+  padding: 0 12px;
+  height: 40px;
+  min-width: 120px;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 14px;
+  color: #333;
+  cursor: pointer;
+}
+
+.arrow {
+  font-size: 12px;
+  color: #999;
+  margin-left: 8px;
+}
+
+.btn {
+  height: 40px;
+  padding: 0 24px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: opacity 0.2s;
+}
+
+.btn:hover { opacity: 0.9; }
+.btn-primary { background-color: #007aff; color: #fff; }
+
+.table-card {
+  background-color: #fff;
+  border-radius: 12px;
+  padding: 30px; /* 增加留白 */
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.04);
+  /* 允许卡片内横向滚动，但建议用专门的scroll容器 */
+  overflow: hidden; 
+}
+
+/* 新增：表格滚动容器 */
+.table-scroll {
+  width: 100%;
+  overflow-x: auto;
+  padding-bottom: 10px; /* 预留滚动条空间 */
+}
+
+.table-header {
+  display: flex;
+  flex-direction: row;
+  padding: 16px 20px; /* 增加内边距 */
+  background-color: #f9f9fa;
+  border-radius: 8px;
+  margin-bottom: 12px;
+  font-weight: 600;
+  color: #555; /* 优化字体颜色 */
+  font-size: 14px; /* 优化字体大小 */
+  min-width: 900px; /* 确保最小宽度，触发滚动 */
+}
+
+.table-row {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  padding: 20px; /* 增加行高/内边距 */
+  border-bottom: 1px solid #f5f5f5;
+  transition: background 0.2s;
+  min-width: 900px; /* 确保最小宽度，触发滚动 */
+}
+
+.table-row:hover {
+  background-color: #f5f5f7;
+}
+
+.col { 
+  flex: 1; 
+  padding: 0 10px; /* 增加列间距 */
+  overflow: hidden; /* 防止内容溢出容器 */
+}
+.col-user { flex: 2; min-width: 240px; }
+.col-date { flex: 1.5; color: #666; font-size: 14px; min-width: 150px; }
+.col-status { flex: 1; min-width: 100px; }
+.col-action { 
+  flex: 1.5; 
+  text-align: right; 
+  min-width: 200px; 
+  white-space: nowrap; 
+  display: flex;
+  flex-direction: row;
+  justify-content: flex-end;
+  align-items: center;
+  position: relative;
+  z-index: 2; /* 提升层级 */
+}
+
+.user-cell {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+}
+
+.user-avatar {
+  width: 44px; /* 稍微调大头像 */
+  height: 44px;
+  background-color: #007aff;
+  color: #fff;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  font-weight: bold;
+  margin-right: 16px;
+}
+
+.user-info {
+  display: flex;
+  flex-direction: column;
+}
+
+.username {
+  font-size: 15px;
+  font-weight: 500;
+  color: #333;
+  margin-bottom: 4px;
+}
+
+.email {
+  font-size: 13px;
+  color: #888;
+}
+
+.status-badge {
+  padding: 6px 16px;
+  border-radius: 16px;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.status-badge.active { background-color: #e6f7ff; color: #007aff; }
+.status-badge.disabled { background-color: #fff0f0; color: #ff3b30; }
+
+.action-btn {
+  font-size: 13px;
+  padding: 4px 12px;
+  margin-left: 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: #f5f5f5; /* 默认背景，增加点击区域可视感 */
+}
+
+.action-btn:hover { opacity: 0.8; }
+.action-btn.primary { color: #007aff; background-color: #e6f7ff; }
+.action-btn.warning { color: #ff9500; background-color: #fff7e6; }
+.action-btn.danger { color: #ff3b30; background-color: #fff0f0; }
+
+.pagination-container {
+  display: flex;
+  flex-direction: row;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 24px;
+  padding-top: 24px;
+  border-top: 1px solid #f5f5f5;
+}
+
+.total-text {
+  font-size: 14px;
+  color: #999;
+}
+
+.page-ctrl {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 12px;
+}
+
+.page-btn {
+  height: 32px;
+  padding: 0 16px;
+  border-radius: 6px;
+  background-color: #fff;
+  border: 1px solid #e5e5e5;
+  font-size: 13px;
+  color: #666;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  cursor: pointer;
+}
+
+.page-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.page-num {
+  font-size: 14px;
+  color: #333;
+  font-weight: 500;
+}
+</style>

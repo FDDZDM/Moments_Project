@@ -1,0 +1,603 @@
+<template>
+  <view class="container">
+    <scroll-view scroll-y class="detail-scroll">
+	  <!-- 返回按钮 -->
+	  <view class="back-button" @click="goBack">
+	    <text class="icon">←</text>
+	  </view>
+	  
+      <!-- 帖子标题 -->
+      <view class="post-title">{{ post.title || '无标题' }}</view>
+
+      <!-- 作者信息 -->
+      <view class="post-author">
+        <image :src="post.avatarUrl" mode="aspectFill" class="avatar" />
+        <text>{{ post.author || '匿名' }}</text>
+        <text class="time">{{ post.createdAt }}</text>
+      </view>
+
+      <!-- 描述内容 -->
+      <view v-if="post.description" class="post-desc">{{ post.description }}</view>
+
+      <!-- 媒体展示 -->
+      <view v-if="post.mediaUrl" class="media-container">
+        <image v-if="post.type === 'image'" :src="post.mediaUrl" mode="widthFix" class="media" />
+        <video v-else-if="post.type === 'video'" :src="post.mediaUrl" controls class="media"></video>
+      </view>
+
+      <!-- 评分区域 -->
+      <view class="rating-section">
+        <view class="rating-header">
+          <text>评分：{{ ratingData.average_rating.toFixed(1) }} ⭐</text>
+          <text>({{ ratingData.rating_count }}人评分)</text>
+        </view>
+        <view class="rating-distribution">
+          <view v-for="star in [5,4,3,2,1]" :key="star" class="bar-row">
+            <text>{{ star }}⭐</text>
+            <progress
+              :percent="(ratingData.rating_distribution[star] / (ratingData.rating_count || 1)) * 100"
+              stroke-width="12"
+              activeColor="#FFD700"
+            />
+            <text>{{ ratingData.rating_distribution[star] }}</text>
+          </view>
+        </view>
+        <view v-if="ratingData.user_rating !== null" class="my-rating">
+          您的评分：{{ ratingData.user_rating }} ⭐
+        </view>
+      </view>
+
+      <!-- 发表评论区 -->
+      <view class="comment-input-section">
+        <textarea
+          v-model="newComment.content"
+          placeholder="写下你的评论..."
+          maxlength="500"
+          class="comment-textarea"
+        />
+        <view class="rating-input">
+          <text>打分（可选）：</text>
+          <radio-group :value="newComment.rating" @change="onRatingChange">
+            <label v-for="r in [1,2,3,4,5]" :key="r" class="star-radio">
+              <radio :value="r.toString()" color="#FFD700" />
+              <text>{{ r }}⭐</text>
+            </label>
+          </radio-group>
+        </view>
+        <button @click="submitComment" :disabled="submitting" class="submit-btn">
+          {{ submitting ? '提交中...' : '发表评论' }}
+        </button>
+      </view>
+
+      <!-- 评论列表 -->
+      <view class="comments-section">
+        <view class="section-title">评论 ({{ ratingData.comment_count }})</view>
+        <view v-for="comment in comments" :key="comment._id" class="comment-item">
+          <view class="comment-header">
+            <text class="comment-author">{{ comment.author || '匿名' }}</text>
+            <text v-if="comment.rating" class="comment-rating">{{ comment.rating }} ⭐</text>
+            <text class="comment-time">{{ comment.createdAt }}</text>
+          </view>
+          <view class="comment-content">{{ comment.comment_content }}</view>
+          <view v-if="isMyComment(comment)" class="comment-actions">
+            <button size="mini" @click="deleteComment(comment)">删除</button>
+          </view>
+        </view>
+
+        <view v-if="loadingComments && comments.length === 0" class="loading">加载中...</view>
+        <view v-else-if="!hasMoreComments && comments.length > 0" class="no-more">没有更多了</view>
+        <view v-else-if="comments.length === 0 && !loadingComments" class="empty">暂无评论</view>
+      </view>
+    </scroll-view>
+
+    <!-- 删除确认弹窗 -->
+    <view v-if="showDeleteConfirm" class="delete-modal">
+      <text>确定删除这条评论？</text>
+      <button @click="confirmDelete">确定</button>
+      <button @click="showDeleteConfirm = false">取消</button>
+    </view>
+  </view>
+</template>
+
+<script setup>
+import { ref } from 'vue'
+import { onLoad } from '@dcloudio/uni-app'
+
+// 路由参数
+const contentId = ref('')
+
+// 帖子数据
+const post = ref({
+  title: '',
+  description: '',
+  mediaUrl: '',
+  type: 'text',
+  author: '',
+  avatarUrl: 'https://picsum.photos/100/100?random=1',
+  createdAt: '',
+  user_id: '' // 注意：这是帖子作者的 uid
+})
+
+// 评论相关
+const comments = ref([])
+const loadingComments = ref(false)
+const hasMoreComments = ref(true)
+const currentPage = ref(1)
+const pageSize = 10
+
+// 评分数据
+const ratingData = ref({
+  average_rating: 0,
+  rating_count: 0,
+  rating_distribution: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 },
+  user_rating: null,
+  comment_count: 0
+})
+
+// 新评论
+const newComment = ref({ content: '', rating: '' })
+const submitting = ref(false)
+
+// 删除状态
+const showDeleteConfirm = ref(false)
+const commentToDelete = ref(null)
+
+// 当前用户 uid
+const myUserId = ref('')
+const userToken = ref('')
+// ===== 页面加载 =====
+onLoad(async (query) => {
+  console.log('【Detail 页面接收到的路由参数（onLoad）】', query)
+
+  const id = query?.id?.trim()
+  if (!id || id === 'undefined' || id === 'null') {
+    uni.showToast({ title: '无效内容ID', icon: 'none' })
+    setTimeout(() => uni.navigateBack(), 1500)
+    return
+  }
+
+  contentId.value = id
+
+  // ✅ 检查登录状态
+  const token = uni.getStorageSync('uni_id_token')
+  userToken.value = token
+  if (!token) {
+    uni.showToast({ title: '请先登录', icon: 'none' })
+    setTimeout(() => uni.redirectTo({ url: '/pages/user/login/login' }), 1500)
+    return
+  }
+
+  // ✅ 获取当前用户 uid
+  const rawStorage = uni.getStorageSync('user_info')
+  const userInfo = rawStorage?.userInfo || rawStorage || {}
+  console.log('【Detail 页面】userInfo:', userInfo)
+  console.log('【Detail 页面】userInfo._id:', userInfo?._id)
+  if (userInfo?._id) {
+    myUserId.value = userInfo._id
+  } else {
+    // 如果没有 user_info，仍可继续浏览，但无法评论
+    console.warn('未找到 userInfo._id，可能影响评论功能')
+  }
+
+  await loadPostDetail()
+  await loadRating()
+  await loadComments(true)
+})
+
+// ===== 方法 =====
+
+async function loadPostDetail() {
+  try {
+    const res = await uniCloud.callFunction({
+      name: 'content-api',
+      data: { action: 'get', content_id: contentId.value },
+      env: 'cloud' // ✅
+    })
+    if (res.result?.code === 200) {
+      const item = res.result.data
+      post.value = {
+        title: item.title || '',
+        description: item.text_content || '',
+        mediaUrl: item.media_files?.[0]?.url || '',
+        type: item.content_type || 'text',
+        author: item.author || '匿名',
+        avatarUrl: item.avatar || 'https://picsum.photos/100/100?random=1',
+        createdAt: formatDate(item.created_at),
+        user_id: item.user_id // 帖子作者 uid
+      }
+    } else {
+      uni.showToast({ title: '内容不存在', icon: 'none' })
+      setTimeout(() => uni.navigateBack(), 1500)
+    }
+  } catch (err) {
+    console.error('加载帖子失败', err)
+    uni.showToast({ title: '加载失败', icon: 'none' })
+  }
+}
+
+async function loadRating() {
+  try {
+    const res = await uniCloud.callFunction({
+      name: 'comment-api',
+      data: { 
+	   action: 'get-content-rating',
+	   contentId: contentId.value,
+	   token: userToken.value
+	   }
+    })
+    if (res.result?.code === 200) {
+      const data = res.result.data
+      
+            ratingData.value = {
+              average_rating: data.average_rating || 0,
+              rating_count: data.rating_count || 0,
+              rating_distribution: data.rating_distribution || { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 },
+              comment_count: data.comment_count || 0,
+              user_rating: data.user_rating ? data.user_rating.rating : null  // ✅ 只取 rating 字段
+            }
+    }
+  } catch (err) {
+    console.error('加载评分失败', err)
+  }
+}
+
+async function loadComments(reset = false) {
+  if (!hasMoreComments.value && !reset) return
+  if (loadingComments.value) return
+
+  loadingComments.value = true
+  if (reset) {
+    currentPage.value = 1
+    comments.value = []
+  } else {
+    currentPage.value++
+  }
+
+  try {
+    const res = await uniCloud.callFunction({
+      name: 'comment-api',
+      data: {
+        action: 'list-comments',
+        contentId: contentId.value,
+        page: currentPage.value,
+        pageSize: pageSize,
+		token: userToken.value
+      }
+    })
+	
+	//console.log('【loadComments 返回】:', JSON.stringify(res, null, 2))
+
+    if (res.result?.code === 200) {
+      const list = (res.result.data.comments || []).map(c => ({
+        ...c,
+        author: c.user_info?.nickname || c.user_info?.username || '匿名',
+        createdAt: formatDate(c.created_at)
+      }))
+      if (reset) {
+        comments.value = list
+		console.log('【赋值给 comments】:', list)
+      } else {
+        comments.value.push(...list)
+      }
+      hasMoreComments.value = res.result.data.hasMore
+    }
+  } catch (err) {
+    console.error('加载评论失败', err)
+    uni.showToast({ title: '评论加载失败', icon: 'none' })
+  } finally {
+    loadingComments.value = false
+  }
+}
+
+async function submitComment() {
+  // ✅ 再次检查登录（防止 token 过期）
+  const token = uni.getStorageSync('uni_id_token')
+  if (!token) {
+    uni.showToast({ title: '请先登录', icon: 'none' })
+    setTimeout(() => uni.redirectTo({ url: '/pages/user/login/login' }), 1500)
+    return
+  }
+
+  if (!newComment.value.content.trim()) {
+    uni.showToast({ title: '请输入评论内容', icon: 'none' })
+    return
+  }
+
+  submitting.value = true
+  try {
+    const rating = newComment.value.rating ? parseInt(newComment.value.rating) : null
+
+    const res = await uniCloud.callFunction({
+      name: 'comment-api',
+      data: {
+        action: 'add-comment',
+        contentId: contentId.value,
+        commentContent: newComment.value.content.trim(),
+        rating: rating,
+		token: userToken.value
+      }
+    })
+	
+	// console.log('【submitComment 接口返回】:', JSON.stringify(res, null, 2))
+
+    if (res.result?.code === 200) {
+      uni.showToast({ title: '评论成功', icon: 'success' })
+      newComment.value = { content: '', rating: '' }
+      await loadRating()
+      await loadComments(true)
+    } else {
+      uni.showToast({ title: res.result?.message || '评论失败', icon: 'none' })
+    }
+  } catch (err) {
+    console.error('提交评论失败', err)
+    uni.showToast({ title: '网络错误', icon: 'none' })
+  } finally {
+    submitting.value = false
+  }
+}
+function goBack() {
+  uni.navigateBack()
+}
+
+function onRatingChange(e) {
+  newComment.value.rating = e.detail.value
+}
+
+function deleteComment(comment) {
+  commentToDelete.value = comment
+  showDeleteConfirm.value = true
+}
+
+async function confirmDelete() {
+  const comment = commentToDelete.value
+  if (!comment) return
+
+  try {
+    const res = await uniCloud.callFunction({
+      name: 'comment-api',
+      data: { 
+		action: 'delete-comment', 
+		commentId: comment._id,
+		token: userToken.value
+		}
+    })
+
+    if (res.result?.code === 200) {
+      uni.showToast({ title: '删除成功', icon: 'success' })
+      await loadRating()
+      await loadComments(true)
+    } else {
+      uni.showToast({ title: res.result?.message || '删除失败', icon: 'none' })
+    }
+  } catch (err) {
+    console.error('删除失败', err)
+    uni.showToast({ title: '删除失败', icon: 'none' })
+  } finally {
+    showDeleteConfirm.value = false
+    commentToDelete.value = null
+  }
+}
+
+function formatDate(timestamp) {
+  if (!timestamp) return ''
+  const d = new Date(timestamp)
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
+}
+
+function isMyComment(comment) {
+  // 评论的 user_id 必须等于当前用户的 uid
+  return comment.user_id === myUserId.value
+}
+</script>
+
+<style scoped>
+/* 样式保持不变，此处省略以节省篇幅 */
+.container {
+  height: 100vh;
+  background-color: #f8f9fa;
+  display: flex;
+  flex-direction: column;
+}
+
+.detail-scroll {
+  flex: 1;
+  padding: 20rpx;
+  box-sizing: border-box;
+}
+
+.post-title {
+  font-size: 36rpx;
+  font-weight: bold;
+  margin-bottom: 20rpx;
+  color: #333;
+}
+
+.post-author {
+  display: flex;
+  align-items: center;
+  gap: 10rpx;
+  margin-bottom: 20rpx;
+  font-size: 28rpx;
+  color: #666;
+}
+
+.avatar {
+  width: 50rpx;
+  height: 50rpx;
+  border-radius: 50%;
+}
+
+.time {
+  margin-left: auto;
+}
+
+.post-desc {
+  background: white;
+  padding: 20rpx;
+  border-radius: 10rpx;
+  margin-bottom: 20rpx;
+  line-height: 1.6;
+  color: #555;
+}
+
+.media-container .media {
+  width: 100%;
+  border-radius: 10rpx;
+  margin-bottom: 20rpx;
+}
+
+.rating-section {
+  background: white;
+  padding: 20rpx;
+  border-radius: 10rpx;
+  margin-bottom: 30rpx;
+}
+.rating-header {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 20rpx;
+  font-weight: bold;
+}
+.rating-distribution .bar-row {
+  display: flex;
+  align-items: center;
+  gap: 10rpx;
+  margin-bottom: 10rpx;
+  font-size: 24rpx;
+}
+.rating-distribution progress {
+  flex: 1;
+  margin: 0 10rpx;
+}
+.my-rating {
+  margin-top: 10rpx;
+  color: #007aff;
+  font-weight: bold;
+}
+
+.comment-input-section {
+  background: white;
+  padding: 20rpx;
+  border-radius: 10rpx;
+  margin-bottom: 30rpx;
+}
+.comment-textarea {
+  width: 100%;
+  height: 120rpx;
+  padding: 10rpx;
+  border: 1rpx solid #ddd;
+  border-radius: 10rpx;
+  font-size: 28rpx;
+  margin-bottom: 20rpx;
+}
+.rating-input {
+  display: flex;
+  align-items: center;
+  gap: 10rpx;
+  margin-bottom: 20rpx;
+  font-size: 26rpx;
+}
+.star-radio {
+  display: flex;
+  align-items: center;
+  margin-right: 20rpx;
+}
+.submit-btn {
+  width: 100%;
+  background-color: #007aff;
+  color: white;
+  border-radius: 10rpx;
+  padding: 15rpx;
+  font-size: 28rpx;
+}
+
+.section-title {
+  font-weight: bold;
+  margin: 20rpx 0;
+  color: #333;
+}
+.comment-item {
+  background: white;
+  padding: 20rpx;
+  border-radius: 10rpx;
+  margin-bottom: 20rpx;
+}
+.comment-header {
+  display: flex;
+  align-items: center;
+  gap: 10rpx;
+  margin-bottom: 10rpx;
+}
+.comment-author {
+  font-weight: bold;
+}
+.comment-rating {
+  color: #FFD700;
+}
+.comment-time {
+  margin-left: auto;
+  font-size: 24rpx;
+  color: #999;
+}
+.comment-content {
+  line-height: 1.6;
+  color: #555;
+}
+.comment-actions {
+  margin-top: 10rpx;
+  text-align: right;
+}
+.comment-actions button {
+  padding: 5rpx 15rpx;
+  font-size: 24rpx;
+}
+
+.loading, .no-more, .empty {
+  text-align: center;
+  padding: 20rpx;
+  color: #999;
+}
+
+.delete-modal {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background: white;
+  padding: 40rpx;
+  border-radius: 20rpx;
+  z-index: 1000;
+  text-align: center;
+}
+.delete-modal button {
+  margin-top: 20rpx;
+  padding: 10rpx 30rpx;
+  border-radius: 10rpx;
+  font-size: 28rpx;
+  width: 100%;
+}
+.delete-modal button:first-child {
+  background-color: #ff4d4d;
+  color: white;
+}
+.delete-modal button:last-child {
+  background-color: #eee;
+  margin-top: 10rpx;
+}
+.back-button {
+  position: fixed;
+  top: var(--status-bar-height); /* 避开状态栏 */
+  left: 20rpx;
+  z-index: 999;
+  width: 60rpx;
+  height: 60rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 36rpx;
+  color: #007aff;
+  background-color: rgba(255, 255, 255, 0.8);
+  border-radius: 50%;
+  box-shadow: 0 2rpx 10rpx rgba(0,0,0,0.1);
+}
+</style>

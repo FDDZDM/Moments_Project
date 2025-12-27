@@ -1,0 +1,107 @@
+<template>
+  <view class="uni-popup-dialog">
+    <view class="uni-dialog-title">
+      <text class="uni-dialog-title-text">{{ title }}</text>
+    </view>
+    <view class="uni-dialog-content">
+      <text class="uni-dialog-content-text" v-if="content">{{ content }}</text>
+      <slot></slot>
+    </view>
+    <view class="uni-dialog-button-group">
+      <view class="uni-dialog-button" @click="onClose">
+        <text class="uni-dialog-button-text">取消</text>
+      </view>
+      <view class="uni-dialog-button uni-dialog-button-confirm" @click="onConfirm">
+        <text class="uni-dialog-button-text uni-dialog-button-text-confirm">确定</text>
+      </view>
+    </view>
+  </view>
+</template>
+
+<script setup>
+const props = defineProps({
+  title: {
+    type: String,
+    default: ''
+  },
+  content: {
+    type: String,
+    default: ''
+  }
+})
+
+const emit = defineEmits(['confirm', 'close'])
+
+const onClose = () => {
+  emit('close')
+}
+
+const onConfirm = () => {
+  emit('confirm')
+}
+</script>
+
+<style scoped>
+.uni-popup-dialog {
+  width: 300px;
+  border-radius: 12px;
+  background-color: #fff;
+  overflow: hidden;
+}
+
+.uni-dialog-title {
+  padding: 20px 15px 10px;
+  align-items: center;
+  justify-content: center;
+  display: flex;
+}
+
+.uni-dialog-title-text {
+  font-size: 16px;
+  font-weight: 500;
+  color: #333;
+}
+
+.uni-dialog-content {
+  padding: 0 15px 20px;
+  align-items: center;
+  justify-content: center;
+  display: flex;
+  flex-direction: column;
+}
+
+.uni-dialog-content-text {
+  font-size: 14px;
+  color: #666;
+  text-align: center;
+}
+
+.uni-dialog-button-group {
+  display: flex;
+  flex-direction: row;
+  border-top: 1px solid #eee;
+}
+
+.uni-dialog-button {
+  flex: 1;
+  height: 48px;
+  align-items: center;
+  justify-content: center;
+  display: flex;
+  border-right: 1px solid #eee;
+  cursor: pointer;
+}
+
+.uni-dialog-button:last-child {
+  border-right: none;
+}
+
+.uni-dialog-button-text {
+  font-size: 16px;
+  color: #666;
+}
+
+.uni-dialog-button-text-confirm {
+  color: #007aff;
+}
+</style>

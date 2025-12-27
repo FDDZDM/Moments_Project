@@ -1,0 +1,94 @@
+{
+  "bsonType": "object",
+  "required": [
+    "content_id",
+    "user_id"
+  ],
+  "permission": {
+    "read": "auth.uid != null",
+    "create": "auth.uid != null",
+    "delete": "doc.user_id == auth.uid",
+    "update": false
+  },
+  "properties": {
+    "_id": {
+      "description": "ID，系统自动生成"
+    },
+    "content_id": {
+      "bsonType": "string",
+      "description": "内容ID，指向contents表",
+      "foreignKey": "contents._id"
+    },
+    "user_id": {
+      "bsonType": "string",
+      "description": "用户ID",
+      "foreignKey": "uni-id-users._id"
+    },
+    "folder_id": {
+      "bsonType": "string",
+      "description": "收藏夹ID，可以分类收藏内容"
+    },
+    "tags": {
+      "bsonType": "array",
+      "description": "收藏标签",
+      "items": {
+        "bsonType": "string",
+        "trim": "both"
+      }
+    },
+    "note": {
+      "bsonType": "string",
+      "description": "收藏备注",
+      "maxLength": 200
+    },
+    "create_date": {
+      "bsonType": "timestamp",
+      "description": "收藏时间",
+      "forceDefaultValue": {
+        "$env": "now"
+      }
+    },
+    "update_date": {
+      "bsonType": "timestamp",
+      "description": "更新时间",
+      "forceDefaultValue": {
+        "$env": "now"
+      }
+    }
+  },
+  "indexes": [
+    {
+      "IndexName": "content_user_idx",
+      "MgoKeySchema": {
+        "MgoIndexKeys": [
+          {
+            "Name": "content_id",
+            "Direction": "1"
+          },
+          {
+            "Name": "user_id",
+            "Direction": "1"
+          }
+        ]
+      },
+      "MgoIsUnique": true
+    },
+    {
+      "IndexName": "user_create_date_idx",
+      "MgoKeySchema": {
+        "MgoIndexKeys": [
+          {
+            "Name": "user_id",
+            "Direction": "1"
+          },
+          {
+            "Name": "create_date",
+            "Direction": "-1"
+          }
+        ]
+      },
+      "MgoIsUnique": false
+    }
+  ],
+  "version": "1.0.0"
+}

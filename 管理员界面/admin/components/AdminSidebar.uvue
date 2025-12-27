@@ -1,0 +1,164 @@
+<template>
+  <view class="admin-sidebar">
+    <view class="logo-area">
+      <text class="app-name">管理后台</text>
+    </view>
+    
+    <view class="menu-list">
+      <view 
+        class="menu-item" 
+        :class="{ active: currentPath === 'dashboard' }"
+        @click="switchTab('dashboard')"
+      >
+        <text class="menu-text">系统概览</text>
+      </view>
+      
+      <view 
+        class="menu-item" 
+        :class="{ active: currentPath === 'user' }"
+        @click="switchTab('user')"
+      >
+        <text class="menu-text">用户管理</text>
+      </view>
+      
+      <view 
+        class="menu-item" 
+        :class="{ active: currentPath === 'content' }"
+        @click="switchTab('content')"
+      >
+        <text class="menu-text">内容管理</text>
+      </view>
+    </view>
+    
+    <view class="sidebar-footer">
+      <view class="menu-item logout" @click="handleLogout">
+        <text class="menu-text">退出登录</text>
+      </view>
+    </view>
+  </view>
+</template>
+
+<script setup>
+  const props = defineProps({
+    currentPath: {
+      type: String,
+      default: 'dashboard'
+    }
+  })
+
+  const switchTab = (path) => {
+    if (path === props.currentPath) return
+    
+    let url = ''
+    switch (path) {
+      case 'dashboard':
+        url = '/admin/pages/dashboard/dashboard'
+        break
+      case 'user':
+        url = '/admin/pages/user/user'
+        break
+      case 'content':
+        url = '/admin/pages/content/content'
+        break
+    }
+    
+    uni.reLaunch({ url })
+  }
+  
+  const handleLogout = () => {
+    uni.removeStorageSync('adminToken')
+    uni.removeStorageSync('adminUser')
+    uni.reLaunch({ url: '/admin/pages/login/login' })
+  }
+</script>
+
+<style scoped>
+  .admin-sidebar {
+    width: 240px;
+    height: 100vh;
+    background-color: #fff;
+    border-right: 1px solid #e5e5e5;
+    display: flex;
+    flex-direction: column;
+    position: fixed;
+    left: 0;
+    top: 0;
+    z-index: 100;
+    box-shadow: 2px 0 8px rgba(0,0,0,0.02);
+  }
+
+  .logo-area {
+    height: 64px;
+    display: flex;
+    align-items: center;
+    justify-content: center; /* 居中显示标题 */
+    padding: 0 24px;
+    border-bottom: 1px solid #f5f5f5;
+  }
+
+  .app-name {
+    font-size: 18px;
+    font-weight: 600;
+    color: #1d1d1f;
+  }
+
+  .menu-list {
+    flex: 1;
+    padding: 16px 12px;
+    overflow-y: auto;
+  }
+
+  /* 统一菜单项样式 */
+  .menu-item {
+    display: flex;
+    align-items: center;
+    justify-content: center; /* 文字居中 */
+    height: 50px; 
+    padding: 0 16px;
+    margin-bottom: 8px;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    color: #333;
+  }
+
+  .menu-item:hover {
+    background-color: #f5f5f7;
+    color: #007aff;
+  }
+
+  .menu-item.active {
+    background-color: #e6f7ff;
+    color: #007aff;
+    font-weight: 500;
+  }
+  
+  /* 激活状态下文字颜色 */
+  .menu-item.active .menu-text {
+    color: #007aff;
+    font-weight: 500;
+  }
+
+  .menu-text {
+    font-size: 15px;
+    color: inherit;
+  }
+
+  .sidebar-footer {
+    padding: 16px 12px;
+    border-top: 1px solid #f5f5f5;
+  }
+  
+  .logout {
+    color: #666;
+  }
+  
+  .logout:hover {
+    background-color: #fff0f0;
+    color: #ff3b30;
+  }
+  
+  .logout .menu-text {
+    color: inherit;
+  }
+</style>

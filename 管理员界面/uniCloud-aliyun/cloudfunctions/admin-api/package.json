@@ -1,0 +1,27 @@
+{
+  "name": "admin-api",
+  "version": "1.0.0",
+  "description": "管理员后台API",
+  "main": "index.js",
+  "dependencies": {
+    "admin-auth": "file:../common/admin-auth",
+    "uni-config-center": "file:../common/uni-config-center"
+  },
+  "extensions": {
+    "uni-cloud-jql": {
+      "getUserList": { "file": "./index.js" },
+      "toggleUserStatus": { "file": "./index.js" },
+      "deleteUser": { "file": "./index.js" },
+      "getUserDetail": { "file": "./index.js" },
+      "getContentList": { "file": "./index.js" },
+      "approveContent": { "file": "./index.js" },
+      "deleteContent": { "file": "./index.js" },
+      "getContentDetail": { "file": "./index.js" },
+      "getSystemStats": { "file": "./index.js" }
+    }
+  },
+  "cloudfunction-config": {
+    "memorySize": 512,
+    "timeout": 60
+  }
+}

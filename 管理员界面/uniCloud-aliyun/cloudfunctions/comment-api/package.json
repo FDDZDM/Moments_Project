@@ -1,0 +1,7 @@
+{
+  "name": "commit-api",
+  "version": "1.0.0",
+  "description": "评论相关功能云函数集合",
+  "main": "index.js",
+  "dependencies": {}
+}

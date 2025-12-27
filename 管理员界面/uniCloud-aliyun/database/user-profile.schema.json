@@ -1,0 +1,114 @@
+{
+  "bsonType": "object",
+  "required": [
+    "_id",
+    "user_id"
+  ],
+  "permission": {
+    "read": "doc.user_id == auth.uid || 'admin' in auth.role",
+    "update": "doc.user_id == auth.uid || 'admin' in auth.role",
+    "delete": false,
+    "create": "doc.user_id == auth.uid"
+  },
+  "properties": {
+    "_id": {
+      "description": "ID，系统自动生成"
+    },
+    "user_id": {
+      "bsonType": "string",
+      "description": "用户ID，指向用户表",
+      "foreignKey": "uni-id-users._id"
+    },
+    "nickname": {
+      "bsonType": "string",
+      "description": "昵称",
+      "trim": "both",
+      "minLength": 2,
+      "maxLength": 20,
+      "defaultValue": "用户"
+    },
+    "avatar": {
+      "bsonType": "string",
+      "description": "头像URL",
+      "format": "url",
+      "defaultValue": "/static/default-avatar.png"
+    },
+    "gender": {
+      "bsonType": "int",
+      "description": "性别，0: 未知，1: 男，2: 女",
+      "defaultValue": 0
+    },
+    "birthday": {
+      "bsonType": "timestamp",
+      "description": "生日"
+    },
+    "signature": {
+      "bsonType": "string",
+      "description": "个性签名",
+      "maxLength": 100
+    },
+    "location": {
+      "bsonType": "string",
+      "description": "所在地"
+    },
+    "cover_image": {
+      "bsonType": "string",
+      "description": "封面图URL",
+      "format": "url",
+      "defaultValue": "/static/default-cover.jpg"
+    },
+    "following_count": {
+      "bsonType": "int",
+      "description": "关注数",
+      "minimum": 0,
+      "defaultValue": 0
+    },
+    "follower_count": {
+      "bsonType": "int",
+      "description": "粉丝数",
+      "minimum": 0,
+      "defaultValue": 0
+    },
+    "content_count": {
+      "bsonType": "int",
+      "description": "内容数",
+      "minimum": 0,
+      "defaultValue": 0
+    },
+    "likes_count": {
+      "bsonType": "int",
+      "description": "获赞数",
+      "minimum": 0,
+      "defaultValue": 0
+    },
+    "create_date": {
+      "bsonType": "timestamp",
+      "description": "创建时间",
+      "forceDefaultValue": {
+        "$env": "now"
+      }
+    },
+    "update_date": {
+      "bsonType": "timestamp",
+      "description": "更新时间",
+      "forceDefaultValue": {
+        "$env": "now"
+      }
+    }
+  },
+  "indexes": [
+    {
+      "IndexName": "user_profile_idx",
+      "MgoKeySchema": {
+        "MgoIndexKeys": [
+          {
+            "Name": "user_id",
+            "Direction": "1"
+          }
+        ]
+      },
+      "MgoIsUnique": true
+    }
+  ],
+  "version": "1.0.0"
+}

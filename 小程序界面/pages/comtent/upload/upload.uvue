@@ -1,0 +1,363 @@
+<template>
+  <view class="upload-container">
+    <!-- 标题 -->
+    <view class="form-item">
+      <text class="label">标题 *</text>
+      <input
+        v-model="formData.title"
+        placeholder="请输入标题（最多30字）"
+        maxlength="30"
+        class="input"
+      />
+    </view>
+
+    <!-- 描述 -->
+    <view class="form-item">
+      <text class="label">描述（可选）</text>
+      <textarea
+        v-model="formData.description"
+        placeholder="请输入描述文字..."
+        maxlength="500"
+        class="textarea"
+      />
+    </view>
+
+    <!-- 标签 -->
+    <view class="form-item">
+      <text class="label">标签（逗号分隔）</text>
+      <input
+        v-model="rawTags"
+        placeholder="如：美食,旅行,日常"
+        class="input"
+      />
+    </view>
+
+    <!-- 内容类型选择 -->
+    <view class="form-item">
+      <text class="label">内容类型 *</text>
+      <view class="type-selector">
+        <button
+          :class="{ active: formData.type === 'text' }"
+          @click="setContentType('text')"
+        >
+          纯文本
+        </button>
+        <button
+          :class="{ active: formData.type === 'image' }"
+          @click="setContentType('image')"
+        >
+          图片
+        </button>
+        <button
+          :class="{ active: formData.type === 'video' }"
+          @click="setContentType('video')"
+        >
+          视频
+        </button>
+      </view>
+    </view>
+
+    <!-- 媒体上传区域 -->
+    <view v-if="formData.type !== 'text'" class="media-upload">
+      <button @click="selectMedia" class="upload-btn">
+        {{ formData.type === 'image' ? '选择图片' : '选择视频' }}
+      </button>
+
+      <!-- 预览 -->
+      <view v-if="previewUrl" class="preview">
+        <image
+          v-if="formData.type === 'image'"
+          :src="previewUrl"
+          mode="aspectFit"
+          class="preview-media"
+        />
+        <video
+          v-else-if="formData.type === 'video'"
+          :src="previewUrl"
+          controls
+          class="preview-media"
+        ></video>
+      </view>
+
+      <text v-if="mediaError" class="error">{{ mediaError }}</text>
+    </view>
+
+    <!-- 提交按钮 -->
+    <button @click="submitPost" :disabled="isSubmitting" class="submit-btn">
+      {{ isSubmitting ? '发布中...' : '发布内容' }}
+    </button>
+  </view>
+</template>
+
+<script setup lang="uts">
+const formData = ref({
+  title: '',
+  description: '',
+  type: 'text',
+  mediaLocalPath: '',
+  tags: [] as string[]
+})
+
+const rawTags = ref('')
+const previewUrl = ref('')
+const mediaError = ref('')
+const isSubmitting = ref(false)
+
+// 自动处理标签（最多5个，去重）
+watch(() => rawTags.value, (newVal) => {
+  if (!newVal) {
+    formData.value.tags = []
+    return
+  }
+  const tags = newVal
+    .split(',')
+    .map(t => t.trim())
+    .filter(t => t)
+    .slice(0, 5)
+  formData.value.tags = [...new Set(tags)]
+})
+
+function setContentType(type: string) {
+  formData.value.type = type
+  formData.value.mediaLocalPath = ''
+  previewUrl.value = ''
+  mediaError.value = ''
+}
+
+async function selectMedia() {
+  try {
+    mediaError.value = ''
+
+    if (formData.value.type === 'image') {
+      const res = await uni.chooseImage({ count: 1, sizeType: ['compressed'] })
+      if (res.tempFilePaths.length === 0) return
+      const tempPath = res.tempFilePaths[0]
+      previewUrl.value = tempPath
+      formData.value.mediaLocalPath = tempPath
+
+    } else if (formData.value.type === 'video') {
+      const res = await uni.chooseVideo({ maxDuration: 60, camera: 'back' })
+      if (res.duration > 60) {
+        mediaError.value = '视频时长不能超过60秒'
+        return
+      }
+      previewUrl.value = res.tempFilePath
+      formData.value.mediaLocalPath = res.tempFilePath
+    }
+  } catch (err) {
+    console.error('选择媒体失败:', err)
+    mediaError.value = '选择失败，请重试'
+  }
+}
+
+// 上传到阿里云
+async function uploadToAliyun(localPath: string, fileType: string): Promise<string> {
+  const timestamp = Date.now()
+  const extMatch = localPath.match(/\.([^.]+)$/i)
+  const ext = extMatch ? extMatch[1].toLowerCase() : (fileType === 'image' ? 'jpg' : 'mp4')
+  const userId = 'user' // 可替换为真实 user_id，但不影响路径唯一性
+  const cloudPath = `posts/${fileType}/${userId}_${timestamp}.${ext}`
+
+  try {
+    const res = await uniCloud.uploadFile({
+      filePath: localPath,
+      cloudPath: cloudPath,
+      onUploadProgress(progressEvent) {
+        const percent = Math.round((progressEvent.loaded * 100) / progressEvent.total)
+        console.log('上传进度:', percent + '%')
+      }
+    })
+
+    if (res.fileID) {
+      return res.fileID
+    } else {
+      throw new Error(res.errorMessage || '上传失败')
+    }
+  } catch (err) {
+    console.error('上传失败:', err)
+    throw new Error('网络错误，请重试')
+  }
+}
+
+// 获取当前用户 _id（兼容两种存储结构）
+function getCurrentUserId() {
+  const rawStorage = uni.getStorageSync('user_info')
+  const user_info = rawStorage?.userInfo || rawStorage || {}
+  console.log('【upload 页面】user_info:', user_info)
+  console.log('【upload 页面】_id:', user_info?._id)
+  return user_info?._id || ''
+}
+
+// 正式提交内容
+async function submitPost() {
+  if (!formData.value.title.trim()) {
+    uni.showToast({ title: '请输入标题', icon: 'none' })
+    return
+  }
+
+  if (formData.value.type !== 'text' && !formData.value.mediaLocalPath) {
+    uni.showToast({ title: '请上传媒体文件', icon: 'none' })
+    return
+  }
+
+  isSubmitting.value = true
+
+  try {
+    const userId = getCurrentUserId()
+    if (!userId) {
+      uni.showToast({ title: '请先登录', icon: 'none' })
+      return
+    }
+
+    let mediaFiles = []
+
+    if (formData.value.type !== 'text') {
+      const mediaUrl = await uploadToAliyun(formData.value.mediaLocalPath, formData.value.type)
+
+      let fileType = 'application/octet-stream'
+      if (formData.value.type === 'image') {
+        fileType = mediaUrl.toLowerCase().endsWith('.png') ? 'image/png' : 'image/jpeg'
+      } else if (formData.value.type === 'video') {
+        fileType = 'video/mp4'
+      }
+
+      mediaFiles = [{ url: mediaUrl, file_type: fileType }]
+    }
+
+    // 构造请求数据（注意字段名匹配 content-api 期望）
+    const payload = {
+      action: 'create',
+      title: formData.value.title.trim(),
+      text_content: formData.value.description.trim(), // 注意：不是 description
+      content_type: formData.value.type,
+      tags: formData.value.tags,
+      user_id: userId,
+      media_files: mediaFiles
+    }
+
+    // 调用 content-api 云函数
+    const res = await uniCloud.callFunction({
+      name: 'content-api',
+      data: payload,
+      env: 'cloud'
+    })
+
+    if (res.result?.code === 200) {
+      uni.showToast({ title: '发布成功！', icon: 'success' })
+      setTimeout(() => uni.navigateBack(), 1500)
+    } else {
+      throw new Error(res.result?.message || '发布失败')
+    }
+
+  } catch (err: any) {
+    console.error('发布失败:', err)
+    uni.showToast({ title: err.message || '发布失败，请重试', icon: 'none' })
+  } finally {
+    isSubmitting.value = false
+  }
+}
+</script>
+
+<style scoped>
+.upload-container {
+  padding: 120rpx 30rpx 30rpx;
+  background-color: #f8f9fa;
+  min-height: 100vh;
+}
+
+.form-item {
+  margin-bottom: 40rpx;
+}
+
+.label {
+  display: block;
+  font-size: 28rpx;
+  color: #333;
+  margin-bottom: 16rpx;
+  font-weight: bold;
+}
+
+.input {
+  width: 100%;
+  padding: 10rpx;
+  border: 1rpx solid #ddd;
+  border-radius: 12rpx;
+  font-size: 28rpx;
+  background: white;
+}
+
+.textarea {
+  width: 100%;
+  height: 200rpx;
+  padding: 20rpx;
+  border: 1rpx solid #ddd;
+  border-radius: 12rpx;
+  font-size: 28rpx;
+  background: white;
+  line-height: 1.5;
+}
+
+.type-selector {
+  display: flex;
+  gap: 20rpx;
+}
+
+.type-selector button {
+  flex: 1;
+  padding: 16rpx 0;
+  font-size: 26rpx;
+  background-color: #f0f0f0;
+  color: #333;
+  border-radius: 12rpx;
+}
+
+.type-selector button.active {
+  background-color: #007aff;
+  color: white;
+}
+
+.media-upload {
+  margin-top: 20rpx;
+}
+
+.upload-btn {
+  background-color: #007aff;
+  color: white;
+  padding: 20rpx;
+  border-radius: 12rpx;
+  font-size: 28rpx;
+}
+
+.preview {
+  margin-top: 20rpx;
+  text-align: center;
+}
+
+.preview-media {
+  width: 100%;
+  height: 400rpx;
+  background-color: #eee;
+  border-radius: 12rpx;
+}
+
+.error {
+  color: red;
+  font-size: 24rpx;
+  margin-top: 10rpx;
+  display: block;
+}
+
+.submit-btn {
+  width: 100%;
+  padding: 24rpx;
+  background-color: #007aff;
+  color: white;
+  font-size: 32rpx;
+  border-radius: 16rpx;
+  margin-top: 60rpx;
+}
+
+.submit-btn:disabled {
+  background-color: #ccc;
+}
+</style>

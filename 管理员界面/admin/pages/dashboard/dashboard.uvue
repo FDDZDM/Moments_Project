@@ -1,0 +1,296 @@
+<template>
+  <AdminLayout current-path="dashboard" page-title="系统概览">
+    <view class="dashboard-content">
+      <!-- 核心统计卡片 -->
+      <view class="stats-container">
+        <view class="stat-card">
+          <view class="stat-icon user-icon">👥</view>
+          <view class="stat-info">
+            <view class="stat-title">总用户数</view>
+            <view class="stat-value">{{ userStats.total }}</view>
+            <view class="stat-sub">
+              <text class="trend up">↑ {{ userStats.dailyActive }}</text>
+              <text class="sub-label">今日活跃</text>
+            </view>
+          </view>
+        </view>
+        
+        <view class="stat-card">
+          <view class="stat-icon content-icon">📝</view>
+          <view class="stat-info">
+            <view class="stat-title">总内容数</view>
+            <view class="stat-value">{{ contentStats.total }}</view>
+            <view class="stat-sub">
+              <text class="trend up">↑ {{ contentStats.dailyNew }}</text>
+              <text class="sub-label">今日新增</text>
+            </view>
+          </view>
+        </view>
+        
+        <view class="stat-card">
+          <view class="stat-icon comment-icon">💬</view>
+          <view class="stat-info">
+            <view class="stat-title">总评论数</view>
+            <view class="stat-value">{{ commentStats.total }}</view>
+            <view class="stat-sub">
+              <text class="trend">⭐ {{ ratingStats.average }}</text>
+              <text class="sub-label">平均评分</text>
+            </view>
+          </view>
+        </view>
+      </view>
+      
+      <!-- 趋势图表 -->
+      <view class="chart-section">
+        <view class="section-header">
+          <text class="section-title">数据趋势分析</text>
+          <view class="date-range">近30天</view>
+        </view>
+        <view class="chart-box">
+          <view ref="chartRef" class="chart-canvas"></view>
+        </view>
+      </view>
+    </view>
+  </AdminLayout>
+</template>
+
+<script setup>
+import { ref, onMounted, nextTick } from 'vue'
+import { onLoad, onShow, onResize } from '@dcloudio/uni-app'
+import AdminLayout from '@/admin/components/AdminLayout.uvue'
+import * as echarts from 'echarts'
+
+// 权限检查
+onShow(() => {
+  const token = uni.getStorageSync('adminToken')
+  if (!token) {
+    uni.reLaunch({ url: '/admin/pages/login/login' })
+  }
+})
+
+// 响应式数据
+const userStats = ref({ total: 0, dailyActive: 0 })
+const contentStats = ref({ total: 0, dailyNew: 0 })
+const commentStats = ref({ total: 0 })
+const ratingStats = ref({ average: 0 })
+const trendData = ref({ dates: [], trends: {} })
+const chart = ref(null)
+const chartRef = ref(null)
+
+// 页面加载时获取数据
+onLoad(async () => {
+  if (uni.getStorageSync('adminToken')) {
+    await getSystemStats()
+    await getTrendData()
+  }
+})
+
+onResize(() => {
+  if (chart.value) {
+    chart.value.resize()
+  }
+})
+
+// 获取系统核心统计数据
+const getSystemStats = async () => {
+  try {
+    const res = await uniCloud.callFunction({
+      name: 'admin-api',
+      data: {
+        action: 'getSystemStats',
+        token: uni.getStorageSync('adminToken')
+      }
+    })
+    if (res.result.code === 200) {
+      userStats.value = res.result.data.userStats
+      contentStats.value = res.result.data.contentStats
+      commentStats.value = res.result.data.commentStats
+      ratingStats.value = res.result.data.ratingStats
+    } else {
+      uni.showToast({ title: res.result.message, icon: 'none' })
+    }
+  } catch (e) {
+    uni.showToast({ title: '获取统计数据失败', icon: 'none' })
+  }
+}
+
+// 获取趋势数据
+const getTrendData = async () => {
+  try {
+    const res = await uniCloud.callFunction({
+      name: 'admin-api',
+      data: {
+        action: 'getTrendData',
+        days: 30,
+        token: uni.getStorageSync('adminToken')
+      }
+    })
+    if (res.result.code === 200) {
+      trendData.value = res.result.data
+      nextTick(() => {
+        initChart() // 获取数据后初始化图表
+      })
+    } else {
+      uni.showToast({ title: res.result.message, icon: 'none' })
+    }
+  } catch (e) {
+    uni.showToast({ title: '获取趋势数据失败', icon: 'none' })
+  }
+}
+
+// 初始化图表配置
+const initChart = () => {
+  if (!chartRef.value || !trendData.value.dates || !trendData.value.dates.length) return
+  
+  if (chart.value) {
+    chart.value.dispose()
+  }
+  
+  chart.value = echarts.init(chartRef.value)
+  
+  const option = {
+    tooltip: {
+      trigger: 'axis',
+      axisPointer: { type: 'shadow' }
+    },
+    legend: {
+      data: ['新增用户', '新增内容', '新增评论'],
+      top: 0
+    },
+    grid: {
+      left: '3%',
+      right: '4%',
+      bottom: '3%',
+      containLabel: true
+    },
+    xAxis: {
+      type: 'category',
+      data: trendData.value.dates,
+      axisLabel: {
+        rotate: 45,
+        interval: Math.ceil(trendData.value.dates.length / 7)
+      }
+    },
+    yAxis: { type: 'value' },
+    series: [
+      { name: '新增用户', type: 'line', smooth: true, data: trendData.value.trends.users || [] },
+      { name: '新增内容', type: 'line', smooth: true, data: trendData.value.trends.contents || [] },
+      { name: '新增评论', type: 'line', smooth: true, data: trendData.value.trends.comments || [] }
+    ]
+  }
+  
+  chart.value.setOption(option)
+}
+</script>
+
+<style scoped>
+.stats-container {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 24px;
+  margin-bottom: 32px;
+}
+
+.stat-card {
+  background-color: #fff;
+  border-radius: 12px;
+  padding: 24px;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.04);
+  display: flex;
+  align-items: flex-start;
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.stat-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
+}
+
+.stat-icon {
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 24px;
+  margin-right: 16px;
+}
+
+.user-icon { background-color: #e6f7ff; color: #1890ff; }
+.content-icon { background-color: #f6ffed; color: #52c41a; }
+.comment-icon { background-color: #fff7e6; color: #fa8c16; }
+
+.stat-info {
+  flex: 1;
+}
+
+.stat-title {
+  font-size: 14px;
+  color: #8c8c8c;
+  margin-bottom: 8px;
+}
+
+.stat-value {
+  font-size: 32px;
+  font-weight: 600;
+  color: #262626;
+  margin-bottom: 8px;
+  line-height: 1.2;
+}
+
+.stat-sub {
+  font-size: 12px;
+  color: #8c8c8c;
+  display: flex;
+  align-items: center;
+}
+
+.trend {
+  margin-right: 8px;
+  font-weight: 500;
+}
+
+.trend.up { color: #52c41a; }
+.trend.down { color: #ff4d4f; }
+
+.chart-section {
+  background-color: #fff;
+  border-radius: 12px;
+  padding: 24px;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.04);
+}
+
+.section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+}
+
+.section-title {
+  font-size: 18px;
+  font-weight: 600;
+  color: #262626;
+}
+
+.date-range {
+  font-size: 14px;
+  color: #8c8c8c;
+  background-color: #f5f5f5;
+  padding: 4px 12px;
+  border-radius: 4px;
+}
+
+.chart-box {
+  height: 400px;
+  background-color: #fff;
+  padding: 16px;
+  border-radius: 8px;
+}
+
+.chart-canvas {
+  width: 100%;
+  height: 100%;
+}
+</style>

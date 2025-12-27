@@ -1,0 +1,20 @@
+{
+    "name": "admin-operation",
+    "version": "1.0.0",
+    "description": "后台管理操作（鉴权、删除、审核）",
+    "main": "index.obj.js",
+    "dependencies": {
+        "admin-auth": "file:../common/admin-auth",
+        "uni-config-center": "file:../common/uni-config-center"
+    },
+    "extensions": {},
+    "cloudfunction-config": {
+        "frequencyLimitEnable": false,
+        "blackListEnable": false,
+        "memorySize": 512,
+        "timeout": 60,
+        "triggers": [],
+        "path": "/admin-operation",
+        "runtime": "Nodejs16"
+    }
+}

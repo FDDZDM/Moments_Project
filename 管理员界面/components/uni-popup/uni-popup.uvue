@@ -1,0 +1,72 @@
+<template>
+  <view v-if="show" class="uni-popup" :class="[type]">
+    <view class="uni-popup__mask" @click="maskClick"></view>
+    <view class="uni-popup__content">
+      <slot></slot>
+    </view>
+  </view>
+</template>
+
+<script setup>
+import { ref } from 'vue'
+
+const props = defineProps({
+  type: {
+    type: String,
+    default: 'center'
+  },
+  maskClick: {
+    type: Boolean,
+    default: true
+  }
+})
+
+const show = ref(false)
+
+const open = () => {
+  show.value = true
+}
+
+const close = () => {
+  show.value = false
+}
+
+const maskClick = () => {
+  if (props.maskClick) {
+    close()
+  }
+}
+
+defineExpose({
+  open,
+  close
+})
+</script>
+
+<style scoped>
+.uni-popup {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.uni-popup__mask {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.4);
+}
+
+.uni-popup__content {
+  position: relative;
+  z-index: 1000;
+}
+</style>

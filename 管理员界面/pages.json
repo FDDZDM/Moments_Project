@@ -1,0 +1,147 @@
+{
+  "pages": [    {
+      "path": "admin/pages/login/login",
+      "style": {
+        "navigationBarTextStyle": "black",
+        "navigationStyle": "custom",
+        "navigationBarTitleText": "管理员登录"
+      }
+    },
+    {
+      "path": "pages/index/index",
+      "style": {
+        "navigationBarTextStyle": "black"
+      }
+    },
+    {
+      "path": "pages/user/login/login",
+      "style": {
+        "navigationBarTextStyle": "black"
+      }
+    },
+    {
+      "path": "pages/user/register/register",
+      "style": {
+        "navigationBarTextStyle": "black"
+      }
+    },
+    {
+      "path": "pages/comtent/upload/upload",
+      "style": {
+        "navigationBarTextStyle": "black"
+      }
+    },
+    {
+      "path": "pages/comtent/list/list",
+      "style": {
+        "navigationBarTextStyle": "black"
+      }
+    },
+    {
+      "path": "pages/comtent/detail/detail",
+      "style": {
+        "navigationBarTextStyle": "black"
+      }
+    },
+    {
+      "path": "pages/user/profile/profile",
+      "style": {
+        "navigationBarTextStyle": "black"
+      }
+    },
+    {
+      "path": "pages/user/change-password/change-password",
+      "style": {
+        "navigationBarTextStyle": "black"
+      }
+    },
+    {
+      "path": "admin/pages/dashboard/dashboard",
+      "style": {
+        "navigationBarTextStyle": "black",
+        "navigationStyle": "custom",
+        "navigationBarTitleText": "系统概览",
+        "enablePullDownRefresh": true
+      }
+    },
+    {
+      "path": "admin/pages/user/user",
+      "style": {
+        "navigationBarTextStyle": "black",
+        "navigationStyle": "custom",
+        "navigationBarTitleText": "用户管理",
+        "enablePullDownRefresh": true
+      }
+    },
+    {
+      "path": "admin/pages/user/detail",
+      "style": {
+        "navigationBarTextStyle": "black",
+        "navigationStyle": "custom",
+        "navigationBarTitleText": "用户详情"
+      }
+    },
+    {
+      "path": "admin/pages/content/content",
+      "style": {
+        "navigationBarTextStyle": "black",
+        "navigationStyle": "custom",
+        "navigationBarTitleText": "内容管理",
+        "enablePullDownRefresh": true
+      }
+    },
+    {
+      "path": "admin/pages/content/detail",
+      "style": {
+        "navigationBarTextStyle": "black",
+        "navigationStyle": "custom",
+        "navigationBarTitleText": "内容详情"
+      }
+    }
+  ],
+  "globalStyle": {
+    "navigationBarTextStyle": "black",
+    "navigationStyle": "custom"
+  },
+  "tabBar": {
+    "color": "#999999",
+    "selectedColor": "#007aff",
+    "borderStyle": "black",
+    "backgroundColor": "#ffffff",
+    "list": [
+      {
+        "pagePath": "pages/comtent/upload/upload",
+        "text": "上传",
+        "iconPath": "static/images/upload.png",
+        "selectedIconPath": "static/images/upload_1.png"
+      },
+      {
+        "pagePath": "pages/comtent/list/list",
+        "text": "朋友圈",
+        "iconPath": "static/images/home.png",
+        "selectedIconPath": "static/images/home_1.png"
+      },
+      {
+        "pagePath": "pages/user/profile/profile",
+        "text": "个人中心",
+        "iconPath": "static/images/user.png",
+        "selectedIconPath": "static/images/user_1.png"
+      }
+    ]
+  },
+	"condition" : {
+		"current": 0,
+		"list": [
+			{
+				"name": "admin-login",
+				"path": "admin/pages/login/login",
+				"query": ""
+			},
+			{
+				"name": "admin-dashboard", 
+				"path": "admin/pages/dashboard/dashboard", 
+				"query": "" 
+			}
+		]
+	}
+}

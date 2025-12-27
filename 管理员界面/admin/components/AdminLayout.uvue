@@ -1,0 +1,98 @@
+<template>
+  <view class="admin-layout">
+    <!-- PC 端侧边栏 -->
+    <view class="layout-sidebar">
+      <AdminSidebar :current-path="currentPath" />
+    </view>
+    
+    <!-- 主内容区 -->
+    <view class="layout-main">
+      <AdminHeader :title="pageTitle" />
+      
+      <view class="layout-content">
+        <view class="content-wrapper">
+          <slot></slot>
+        </view>
+      </view>
+    </view>
+    
+    <!-- 移动端底部导航（仅在小屏显示） -->
+    <view class="layout-tabbar">
+      <AdminTabBar :current-path="currentPath" />
+    </view>
+  </view>
+</template>
+
+<script setup>
+  import AdminSidebar from './AdminSidebar.uvue'
+  import AdminHeader from './AdminHeader.uvue'
+  import AdminTabBar from './AdminTabBar.uvue'
+  
+  const props = defineProps({
+    currentPath: {
+      type: String,
+      required: true
+    },
+    pageTitle: {
+      type: String,
+      default: ''
+    }
+  })
+</script>
+
+<style scoped>
+  .admin-layout {
+    display: flex;
+    min-height: 100vh;
+    background-color: #f5f5f7;
+  }
+
+  .layout-sidebar {
+    width: 240px;
+    flex-shrink: 0;
+    display: none; /* 默认隐藏，PC显示 */
+  }
+
+  .layout-main {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-width: 0; /* 防止内容溢出 */
+  }
+  
+  .layout-content {
+    flex: 1;
+    padding: 24px 32px;
+    overflow-y: auto;
+  }
+  
+  .content-wrapper {
+    max-width: 1200px;
+    margin: 0 auto;
+    width: 100%;
+  }
+
+  .layout-tabbar {
+    display: block; /* 默认显示，PC隐藏 */
+  }
+
+  /* 响应式媒体查询：PC端布局 */
+  @media screen and (min-width: 1024px) {
+    .layout-sidebar {
+      display: block;
+    }
+    
+    .layout-tabbar {
+      display: none;
+    }
+    
+    /* 调整主内容区，使其不被侧边栏遮挡（虽然flex布局已经处理了，但为了保险） */
+    .layout-main {
+      margin-left: 240px; 
+    }
+    
+    /* 由于 Sidebar 是 fixed，需要给 main 加 margin-left */
+    /* Wait, flex item doesn't need margin if sidebar is relative. 
+       But sidebar is fixed in css. So we need margin. */
+  }
+</style>
